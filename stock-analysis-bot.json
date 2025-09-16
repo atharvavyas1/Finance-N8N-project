@@ -1,0 +1,548 @@
+{
+    "meta": {
+      "instanceId": "stock-analysis-bot"
+    },
+    "nodes": [
+      {
+        "parameters": {
+          "updates": [
+            "message"
+          ],
+          "additionalFields": {}
+        },
+        "id": "telegram-trigger",
+        "name": "Telegram Trigger",
+        "type": "n8n-nodes-base.telegramTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          240,
+          300
+        ],
+        "webhookId": "telegram-webhook",
+        "credentials": {
+          "telegramApi": {
+            "id": "telegram-credentials",
+            "name": "Telegram Bot API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "condition-1",
+                "leftValue": "={{ $json.message.text }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "validate-input",
+        "name": "Validate Input",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          460,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Extract and validate ticker symbol from message\nconst message = $input.first().json.message.text.trim().toUpperCase();\n\n// Remove any extra characters and validate format\nconst tickerRegex = /^[A-Z]{1,5}$/;\nconst isValidFormat = tickerRegex.test(message);\n\nif (!isValidFormat) {\n  return [{\n    json: {\n      error: true,\n      message: \"Please provide a valid ticker symbol (1-5 letters, e.g., AAPL, TSLA)\",\n      chat_id: $input.first().json.message.chat.id\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ticker: message,\n    chat_id: $input.first().json.message.chat.id,\n    user_id: $input.first().json.message.from.id\n  }\n}];"
+        },
+        "id": "process-ticker",
+        "name": "Process Ticker Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          680,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://finance.yahoo.com/quote/{{ $json.ticker }}",
+          "options": {
+            "redirect": {
+              "redirect": {
+                "followRedirects": false
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "validate-ticker",
+        "name": "Validate Ticker on Yahoo",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          900,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "condition-ticker-valid",
+                "leftValue": "={{ $json.statusCode }}",
+                "rightValue": 200,
+                "operator": {
+                  "type": "number",
+                  "operation": "equals"
+                }
+              },
+              {
+                "id": "condition-no-redirect",
+                "leftValue": "={{ $json.body }}",
+                "rightValue": "lookup",
+                "operator": {
+                  "type": "string",
+                  "operation": "notContains"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "check-ticker-validity",
+        "name": "Check Ticker Validity",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://finance.yahoo.com/quote/{{ $('process-ticker').first().json.ticker }}/news/",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "fetch-news-page",
+        "name": "Fetch Yahoo News Page",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1340,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Parse Yahoo Finance news page and extract news from last 7 days\nconst html = $input.first().json.body;\nconst ticker = $('process-ticker').first().json.ticker;\n\n// Simple HTML parsing to extract news articles\nconst newsRegex = /<h3[^>]*>.*?<a[^>]*href=\"([^\"]*?)\"[^>]*>(.*?)<\\/a>.*?<\\/h3>/gs;\nconst timeRegex = /<time[^>]*>(.*?)<\\/time>/gs;\nconst summaryRegex = /<p[^>]*>(.*?)<\\/p>/gs;\n\nlet articles = [];\nlet match;\n\n// Extract articles with basic regex parsing\nwhile ((match = newsRegex.exec(html)) !== null) {\n  const url = match[1];\n  const title = match[2].replace(/<[^>]*>/g, '').trim();\n  \n  // Skip if title is too short or looks like navigation\n  if (title.length < 10 || title.toLowerCase().includes('more from')) {\n    continue;\n  }\n  \n  articles.push({\n    title: title,\n    url: url.startsWith('http') ? url : `https://finance.yahoo.com${url}`,\n    source: 'Yahoo Finance'\n  });\n  \n  // Limit to first 10 articles to avoid overwhelming the sentiment analysis\n  if (articles.length >= 10) break;\n}\n\n// Filter articles from last 7 days (basic implementation)\nconst oneWeekAgo = new Date();\noneWeekAgo.setDate(oneWeekAgo.getDate() - 7);\n\nif (articles.length === 0) {\n  return [{\n    json: {\n      error: true,\n      message: `Not enough news articles found for ${ticker}. Please try another ticker symbol.`,\n      chat_id: $('process-ticker').first().json.chat_id\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ticker: ticker,\n    articles: articles,\n    article_count: articles.length,\n    chat_id: $('process-ticker').first().json.chat_id\n  }\n}];"
+        },
+        "id": "extract-news",
+        "name": "Extract News Articles",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1560,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Fetch detailed content for each article\nconst articles = $input.first().json.articles;\nconst ticker = $input.first().json.ticker;\nconst detailedArticles = [];\n\n// For demonstration, we'll use titles and any available summaries\n// In production, you might want to fetch full article content\nfor (let article of articles) {\n  detailedArticles.push({\n    title: article.title,\n    content: article.title, // Using title as content for sentiment analysis\n    url: article.url,\n    source: article.source\n  });\n}\n\nreturn [{\n  json: {\n    ticker: ticker,\n    detailed_articles: detailedArticles,\n    chat_id: $input.first().json.chat_id\n  }\n}];"
+        },
+        "id": "fetch-article-content",
+        "name": "Fetch Article Content",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1780,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "command": "pip install yfinance pandas numpy",
+          "options": {}
+        },
+        "id": "install-dependencies",
+        "name": "Install Dependencies",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          1340,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "code": "import yfinance as yf\nimport pandas as pd\nfrom datetime import datetime, timedelta\nimport json\n\n# Get ticker from previous node\nticker = items[0]['json']['ticker']\n\ntry:\n    # Create ticker object\n    stock = yf.Ticker(ticker)\n    \n    # Get data for last 7 days\n    end_date = datetime.now()\n    start_date = end_date - timedelta(days=7)\n    \n    # Fetch historical data\n    hist_data = stock.history(start=start_date, end=end_date)\n    \n    if hist_data.empty:\n        return [{\n            'json': {\n                'error': True,\n                'message': f'No financial data available for {ticker}',\n                'chat_id': items[0]['json']['chat_id']\n            }\n        }]\n    \n    # Get current info\n    info = stock.info\n    \n    # Calculate performance metrics\n    latest_price = float(hist_data['Close'].iloc[-1])\n    week_start_price = float(hist_data['Close'].iloc[0])\n    week_change = ((latest_price - week_start_price) / week_start_price) * 100\n    \n    # Get volume data\n    avg_volume = float(hist_data['Volume'].mean())\n    latest_volume = float(hist_data['Volume'].iloc[-1])\n    \n    # Volatility calculation\n    volatility = float(hist_data['Close'].pct_change().std() * 100)\n    \n    financial_data = {\n        'ticker': ticker,\n        'current_price': latest_price,\n        'week_change_percent': round(week_change, 2),\n        'volatility': round(volatility, 2),\n        'average_volume': int(avg_volume),\n        'latest_volume': int(latest_volume),\n        'company_name': info.get('longName', 'N/A'),\n        'sector': info.get('sector', 'N/A'),\n        'market_cap': info.get('marketCap', 'N/A'),\n        'pe_ratio': info.get('trailingPE', 'N/A'),\n        'chat_id': items[0]['json']['chat_id']\n    }\n    \n    return [{'json': financial_data}]\n    \nexcept Exception as e:\n    return [{\n        'json': {\n            'error': True,\n            'message': f'Error fetching financial data for {ticker}: {str(e)}',\n            'chat_id': items[0]['json']['chat_id']\n        }\n    }]",
+          "nodeVersion": "1"
+        },
+        "id": "fetch-financial-data",
+        "name": "Fetch Financial Data (yfinance)",
+        "type": "n8n-nodes-base.python",
+        "typeVersion": 1,
+        "position": [
+          1560,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "command": "pip install transformers torch",
+          "options": {}
+        },
+        "id": "install-ml-dependencies",
+        "name": "Install ML Dependencies",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [
+          2000,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "code": "from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline\nimport torch\nimport json\nimport numpy as np\n\n# Get articles and financial data\narticles_data = None\nfinancial_data = None\n\nfor item in items:\n    if 'detailed_articles' in item['json']:\n        articles_data = item['json']\n    elif 'current_price' in item['json']:\n        financial_data = item['json']\n\nif not articles_data or not financial_data:\n    return [{\n        'json': {\n            'error': True,\n            'message': 'Missing required data for sentiment analysis',\n            'chat_id': items[0]['json']['chat_id']\n        }\n    }]\n\ntry:\n    # Initialize FinBERT model\n    model_name = \"ProsusAI/finbert\"\n    tokenizer = AutoTokenizer.from_pretrained(model_name)\n    model = AutoModelForSequenceClassification.from_pretrained(model_name)\n    \n    # Create sentiment pipeline\n    sentiment_pipeline = pipeline(\n        \"sentiment-analysis\",\n        model=model,\n        tokenizer=tokenizer,\n        device=0 if torch.cuda.is_available() else -1\n    )\n    \n    # Analyze sentiment for each article\n    article_sentiments = []\n    sentiment_scores = []\n    \n    for article in articles_data['detailed_articles']:\n        # Use article title as content for sentiment analysis\n        text = article['title']\n        \n        # Truncate text to model's max length\n        if len(text) > 512:\n            text = text[:512]\n        \n        # Get sentiment\n        result = sentiment_pipeline(text)[0]\n        \n        # Map FinBERT labels to standardized format\n        label_mapping = {\n            'positive': 'positive',\n            'negative': 'negative', \n            'neutral': 'neutral'\n        }\n        \n        sentiment = label_mapping.get(result['label'].lower(), 'neutral')\n        confidence = result['score']\n        \n        article_sentiments.append({\n            'title': article['title'],\n            'sentiment': sentiment,\n            'confidence': round(confidence, 3),\n            'url': article['url']\n        })\n        \n        # Convert sentiment to numeric score for aggregation\n        if sentiment == 'positive':\n            sentiment_scores.append(confidence)\n        elif sentiment == 'negative':\n            sentiment_scores.append(-confidence)\n        else:\n            sentiment_scores.append(0)\n    \n    # Calculate overall sentiment metrics\n    avg_sentiment_score = np.mean(sentiment_scores)\n    positive_count = sum(1 for s in article_sentiments if s['sentiment'] == 'positive')\n    negative_count = sum(1 for s in article_sentiments if s['sentiment'] == 'negative')\n    neutral_count = sum(1 for s in article_sentiments if s['sentiment'] == 'neutral')\n    \n    # Determine overall sentiment\n    if avg_sentiment_score > 0.1:\n        overall_sentiment = 'positive'\n    elif avg_sentiment_score < -0.1:\n        overall_sentiment = 'negative'\n    else:\n        overall_sentiment = 'neutral'\n    \n    sentiment_analysis = {\n        'ticker': articles_data['ticker'],\n        'overall_sentiment': overall_sentiment,\n        'sentiment_score': round(avg_sentiment_score, 3),\n        'total_articles': len(article_sentiments),\n        'positive_articles': positive_count,\n        'negative_articles': negative_count,\n        'neutral_articles': neutral_count,\n        'article_sentiments': article_sentiments,\n        'chat_id': articles_data['chat_id']\n    }\n    \n    return [{'json': sentiment_analysis}]\n    \nexcept Exception as e:\n    return [{\n        'json': {\n            'error': True,\n            'message': f'Error in sentiment analysis: {str(e)}',\n            'chat_id': articles_data['chat_id']\n        }\n    }]",
+          "nodeVersion": "1"
+        },
+        "id": "sentiment-analysis",
+        "name": "FinBERT Sentiment Analysis",
+        "type": "n8n-nodes-base.python",
+        "typeVersion": 1,
+        "position": [
+          2220,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Combine sentiment analysis and financial data to generate outlook\nconst sentimentData = $('sentiment-analysis').first().json;\nconst financialData = $('fetch-financial-data').first().json;\n\nif (sentimentData.error || financialData.error) {\n  return [{\n    json: {\n      error: true,\n      message: sentimentData.message || financialData.message,\n      chat_id: sentimentData.chat_id || financialData.chat_id\n    }\n  }];\n}\n\n// Generate outlook based on sentiment and financial performance\nfunction generateOutlook(sentiment, financialPerf, volatility) {\n  let outlook = \"\";\n  let rating = \"\";\n  \n  // Determine performance category\n  let perfCategory = \"neutral\";\n  if (financialPerf > 5) perfCategory = \"strong_positive\";\n  else if (financialPerf > 2) perfCategory = \"positive\";\n  else if (financialPerf < -5) perfCategory = \"strong_negative\";\n  else if (financialPerf < -2) perfCategory = \"negative\";\n  \n  // Determine volatility category\n  let volCategory = \"normal\";\n  if (volatility > 5) volCategory = \"high\";\n  else if (volatility > 3) volCategory = \"elevated\";\n  else if (volatility < 1) volCategory = \"low\";\n  \n  // Generate combined outlook\n  if (sentiment === \"positive\" && perfCategory.includes(\"positive\")) {\n    outlook = \"📈 BULLISH: Positive market sentiment aligns with strong stock performance. \";\n    rating = \"BUY\";\n  } else if (sentiment === \"negative\" && perfCategory.includes(\"negative\")) {\n    outlook = \"📉 BEARISH: Negative market sentiment matches poor stock performance. \";\n    rating = \"SELL\";\n  } else if (sentiment === \"positive\" && perfCategory.includes(\"negative\")) {\n    outlook = \"⚖️ MIXED: Positive news sentiment contrasts with recent stock decline. Potential recovery opportunity. \";\n    rating = \"WATCH\";\n  } else if (sentiment === \"negative\" && perfCategory.includes(\"positive\")) {\n    outlook = \"⚠️ CAUTIOUS: Stock performing well despite negative news sentiment. Monitor for potential reversal. \";\n    rating = \"HOLD\";\n  } else {\n    outlook = \"➡️ NEUTRAL: Balanced sentiment and performance indicators. \";\n    rating = \"HOLD\";\n  }\n  \n  // Add volatility context\n  if (volCategory === \"high\") {\n    outlook += \"High volatility suggests increased risk. \";\n  } else if (volCategory === \"low\") {\n    outlook += \"Low volatility indicates stability. \";\n  }\n  \n  return { outlook, rating };\n}\n\nconst weekChange = financialData.week_change_percent;\nconst volatility = financialData.volatility;\nconst { outlook, rating } = generateOutlook(sentimentData.overall_sentiment, weekChange, volatility);\n\n// Create comprehensive analysis\nconst analysis = {\n  ticker: financialData.ticker,\n  company_name: financialData.company_name,\n  analysis_date: new Date().toISOString().split('T')[0],\n  \n  // Financial Summary\n  financial_summary: {\n    current_price: financialData.current_price,\n    week_performance: `${weekChange > 0 ? '+' : ''}${weekChange}%`,\n    volatility: `${volatility}%`,\n    volume_status: financialData.latest_volume > financialData.average_volume ? \"Above Average\" : \"Below Average\"\n  },\n  \n  // News Sentiment Summary\n  sentiment_summary: {\n    overall_sentiment: sentimentData.overall_sentiment.toUpperCase(),\n    confidence_score: sentimentData.sentiment_score,\n    articles_analyzed: sentimentData.total_articles,\n    sentiment_breakdown: {\n      positive: sentimentData.positive_articles,\n      negative: sentimentData.negative_articles,\n      neutral: sentimentData.neutral_articles\n    }\n  },\n  \n  // Investment Outlook\n  investment_outlook: {\n    rating: rating,\n    outlook_description: outlook,\n    key_factors: [\n      `News sentiment is ${sentimentData.overall_sentiment}`,\n      `Stock ${weekChange > 0 ? 'gained' : 'lost'} ${Math.abs(weekChange)}% this week`,\n      `Volatility is ${volatility > 3 ? 'elevated' : 'normal'} at ${volatility}%`\n    ]\n  },\n  \n  // Recent News Headlines (top 3)\n  recent_headlines: sentimentData.article_sentiments.slice(0, 3).map(article => ({\n    title: article.title,\n    sentiment: article.sentiment,\n    confidence: article.confidence\n  })),\n  \n  chat_id: financialData.chat_id\n};\n\nreturn [{ json: analysis }];"
+        },
+        "id": "generate-outlook",
+        "name": "Generate Investment Outlook",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2440,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Format the analysis into a user-friendly message for Telegram\nconst analysis = $input.first().json;\n\nlet message = `🏢 *${analysis.company_name} (${analysis.ticker})*\\n\\n`;\n\n// Financial Performance\nmessage += `💰 *Financial Performance (7 days):*\\n`;\nmessage += `• Current Price: $${analysis.financial_summary.current_price}\\n`;\nmessage += `• Week Change: ${analysis.financial_summary.week_performance}\\n`;\nmessage += `• Volatility: ${analysis.financial_summary.volatility}\\n`;\nmessage += `• Volume: ${analysis.financial_summary.volume_status}\\n\\n`;\n\n// News Sentiment\nmessage += `📰 *News Sentiment Analysis:*\\n`;\nmessage += `• Overall: ${analysis.sentiment_summary.overall_sentiment}\\n`;\nmessage += `• Articles Analyzed: ${analysis.sentiment_summary.articles_analyzed}\\n`;\nmessage += `• Breakdown: ${analysis.sentiment_summary.sentiment_breakdown.positive}+ / ${analysis.sentiment_summary.sentiment_breakdown.neutral}≈ / ${analysis.sentiment_summary.sentiment_breakdown.negative}-\\n\\n`;\n\n// Investment Outlook\nmessage += `🎯 *Investment Outlook: ${analysis.investment_outlook.rating}*\\n`;\nmessage += `${analysis.investment_outlook.outlook_description}\\n\\n`;\n\n// Key Factors\nmessage += `🔍 *Key Factors:*\\n`;\nanalysis.investment_outlook.key_factors.forEach(factor => {\n  message += `• ${factor}\\n`;\n});\n\n// Recent Headlines\nif (analysis.recent_headlines.length > 0) {\n  message += `\\n📈 *Recent Headlines:*\\n`;\n  analysis.recent_headlines.forEach((headline, index) => {\n    const emoji = headline.sentiment === 'positive' ? '✅' : headline.sentiment === 'negative' ? '❌' : '➖';\n    message += `${emoji} ${headline.title.substring(0, 80)}${headline.title.length > 80 ? '...' : ''}\\n`;\n  });\n}\n\nmessage += `\\n📅 _Analysis Date: ${analysis.analysis_date}_`;\nmessage += `\\n🤖 _Powered by FinBERT & Yahoo Finance_`;\n\nreturn [{\n  json: {\n    message: message,\n    chat_id: analysis.chat_id,\n    parse_mode: 'Markdown'\n  }\n}];"
+        },
+        "id": "format-response",
+        "name": "Format Telegram Response",\n      "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2660,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ $json.message }}",
+          "additionalFields": {
+            "parse_mode": "Markdown"
+          }
+        },
+        "id": "send-analysis",
+        "name": "Send Analysis to User",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2880,
+          300
+        ],
+        "credentials": {
+          "telegramApi": {
+            "id": "telegram-credentials",
+            "name": "Telegram Bot API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ $json.message }}",
+          "additionalFields": {}
+        },
+        "id": "send-error",
+        "name": "Send Error Message",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1120,
+          500
+        ],
+        "credentials": {
+          "telegramApi": {
+            "id": "telegram-credentials",
+            "name": "Telegram Bot API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "Invalid ticker symbol: {{ $json.ticker }}. Please provide a valid US stock ticker (e.g., AAPL, TSLA, MSFT).",
+          "additionalFields": {}
+        },
+        "id": "send-invalid-ticker",
+        "name": "Send Invalid Ticker Message",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1340,
+          500
+        ],
+        "credentials": {
+          "telegramApi": {
+            "id": "telegram-credentials",
+            "name": "Telegram Bot API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "Please provide a valid ticker symbol for analysis. Example: AAPL, TSLA, MSFT",
+          "additionalFields": {}
+        },
+        "id": "send-invalid-input",
+        "name": "Send Invalid Input Message",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          680,
+          500
+        ],
+        "credentials": {
+          "telegramApi": {
+            "id": "telegram-credentials",
+            "name": "Telegram Bot API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Optional: Save analysis results for future reference\n// This node is a placeholder for potential data storage\nconst analysis = $input.first().json;\n\n// You could store this data in:\n// - Database (PostgreSQL, MongoDB, etc.)\n// - Google Sheets\n// - Airtable\n// - File system\n\n// For now, just pass through the data\nreturn [{ json: analysis }];"
+        },
+        "id": "store-analysis",
+        "name": "Store Analysis (Optional)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2440,
+          500
+        ]
+      }
+    ],
+    "connections": {
+      "Telegram Trigger": {
+        "main": [
+          [
+            {
+              "node": "Validate Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Input": {
+        "main": [
+          [
+            {
+              "node": "Process Ticker Input",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send Invalid Input Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Process Ticker Input": {
+        "main": [
+          [
+            {
+              "node": "Validate Ticker on Yahoo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Ticker on Yahoo": {
+        "main": [
+          [
+            {
+              "node": "Check Ticker Validity",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Ticker Validity": {
+        "main": [
+          [
+            {
+              "node": "Fetch Yahoo News Page",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Install Dependencies",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Send Invalid Ticker Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Yahoo News Page": {
+        "main": [
+          [
+            {
+              "node": "Extract News Articles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract News Articles": {
+        "main": [
+          [
+            {
+              "node": "Fetch Article Content",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Article Content": {
+        "main": [
+          [
+            {
+              "node": "Install ML Dependencies",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Install Dependencies": {
+        "main": [
+          [
+            {
+              "node": "Fetch Financial Data (yfinance)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Financial Data (yfinance)": {
+        "main": [
+          [
+            {
+              "node": "FinBERT Sentiment Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Install ML Dependencies": {
+        "main": [
+          [
+            {
+              "node": "FinBERT Sentiment Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "FinBERT Sentiment Analysis": {
+        "main": [
+          [
+            {
+              "node": "Generate Investment Outlook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate Investment Outlook": {
+        "main": [
+          [
+            {
+              "node": "Format Telegram Response",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Store Analysis (Optional)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Telegram Response": {
+        "main": [
+          [
+            {
+              "node": "Send Analysis to User",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "pinData": {},
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "versionId": "1"
+  }
