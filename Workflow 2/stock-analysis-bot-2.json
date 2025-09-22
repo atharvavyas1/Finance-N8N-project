@@ -1,0 +1,228 @@
+{
+    "name": "Financial News Agent",
+    "nodes": [
+      {
+        "id": "1",
+        "name": "Telegram Trigger",
+        "type": "n8n-nodes-base.telegramTrigger",
+        "position": [250, 300],
+        "parameters": {
+          "updates": ["message"],
+          "additionalFields": {}
+        },
+        "credentials": {
+          "telegramApi": "Telegram Bot"
+        }
+      },
+      {
+        "id": "2",
+        "name": "Welcome Message",
+        "type": "n8n-nodes-base.telegram",
+        "position": [500, 300],
+        "parameters": {
+          "chatId": "={{$json[\"message\"][\"chat\"][\"id\"]}}",
+          "text": "Hi, welcome to this daily financial news agent! Please enter a stock ticker symbol for which you want aggregated news on."
+        },
+        "credentials": {
+          "telegramApi": "Telegram Bot"
+        }
+      },
+      {
+        "id": "3",
+        "name": "Extract Ticker",
+        "type": "n8n-nodes-base.function",
+        "position": [750, 300],
+        "parameters": {
+          "functionCode": "return [{ ticker: $json[\"message\"][\"text\"].trim().toUpperCase() }];"
+        }
+      },
+      {
+        "id": "4",
+        "name": "Validate Ticker (HTTP)",
+        "type": "n8n-nodes-base.httpRequest",
+        "position": [1000, 300],
+        "parameters": {
+          "url": "={{`https://finance.yahoo.com/quote/${$json[\"ticker\"]}/news/`}}",
+          "responseFormat": "string"
+        }
+      },
+      {
+        "id": "5",
+        "name": "Check Valid Ticker",
+        "type": "n8n-nodes-base.if",
+        "position": [1250, 300],
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{$json[\"body\"]}}",
+                "operation": "contains",
+                "value2": "News"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "6",
+        "name": "Invalid Ticker Message",
+        "type": "n8n-nodes-base.telegram",
+        "position": [1500, 150],
+        "parameters": {
+          "chatId": "={{$node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"]}}",
+          "text": "The ticker symbol you entered is invalid. Please try again."
+        },
+        "credentials": {
+          "telegramApi": "Telegram Bot"
+        }
+      },
+      {
+        "id": "7",
+        "name": "Scrape Yahoo News",
+        "type": "n8n-nodes-base.python",
+        "position": [1500, 450],
+        "parameters": {
+          "script": "# Requires beautifulsoup4, requests\nimport requests, json\nfrom bs4 import BeautifulSoup\nimport datetime\n\nurl = f\"https://finance.yahoo.com/quote/{ticker}/news/\"\nhtml = requests.get(url).text\nsoup = BeautifulSoup(html, \"html.parser\")\n\narticles = []\nnow = datetime.datetime.utcnow()\n\nfor a in soup.select('li.js-stream-content a'):\n    link = a.get('href')\n    if link and link.startswith('/news'):\n        title = a.get_text().strip()\n        full_url = 'https://finance.yahoo.com' + link\n        articles.append({\n            'date': now.strftime('%Y-%m-%d'),\n            'title': title,\n            'url': full_url\n        })\n\nwith open(\"/data/news.json\", \"w\") as f:\n    json.dump(articles, f, indent=2)\n\nreturn {\"file\": \"/data/news.json\"}"
+        }
+      },
+      {
+        "id": "8",
+        "name": "Sentiment Analysis",
+        "type": "n8n-nodes-base.python",
+        "position": [1750, 450],
+        "parameters": {
+          "script": "# Requires torch, transformers\nfrom transformers import AutoTokenizer, AutoModelForSequenceClassification\nimport torch, json\n\nfinbert_name = \"ProsusAI/finbert\"\nroberta_name = \"cardiffnlp/twitter-roberta-base-sentiment\"\n\nfinbert_tok = AutoTokenizer.from_pretrained(finbert_name)\nfinbert_model = AutoModelForSequenceClassification.from_pretrained(finbert_name)\n\nroberta_tok = AutoTokenizer.from_pretrained(roberta_name)\nroberta_model = AutoModelForSequenceClassification.from_pretrained(roberta_name)\n\ndef classify(text, tok, model):\n    inputs = tok(text, return_tensors=\"pt\", truncation=True, max_length=512)\n    outputs = model(**inputs)\n    scores = torch.nn.functional.softmax(outputs.logits, dim=-1)\n    return scores.detach().cpu().numpy().tolist()[0]\n\nwith open(\"/data/news.json\", \"r\") as f:\n    articles = json.load(f)\n\nresults = []\nfor art in articles:\n    text = art['title']\n    art['finbert'] = classify(text, finbert_tok, finbert_model)\n    art['roberta'] = classify(text, roberta_tok, roberta_model)\n    results.append(art)\n\nwith open(\"/data/news_with_sentiment.json\", \"w\") as f:\n    json.dump(results, f, indent=2)\n\nreturn {\"file\": \"/data/news_with_sentiment.json\"}"
+        }
+      },
+      {
+        "id": "9",
+        "name": "Quant Analysis (yfinance stub)",
+        "type": "n8n-nodes-base.python",
+        "position": [2000, 450],
+        "parameters": {
+          "script": "# Requires yfinance\nimport yfinance as yf, json, datetime\n\n# Ticker injected\nsymbol = ticker\n\nend = datetime.datetime.today()\nstart = end - datetime.timedelta(days=10)\ndata = yf.download(symbol, start=start, end=end)\n\nmetrics = {\n    \"return\": float((data['Close'][-1] - data['Close'][0]) / data['Close'][0]),\n    \"volatility\": float(data['Close'].pct_change().std())\n}\n\nwith open(\"/data/quant.json\", \"w\") as f:\n    json.dump(metrics, f, indent=2)\n\nreturn {\"file\": \"/data/quant.json\"}"
+        }
+      },
+      {
+        "id": "10",
+        "name": "Aggregate Results",
+        "type": "n8n-nodes-base.function",
+        "position": [2250, 450],
+        "parameters": {
+          "functionCode": "import json\nwith open('/data/news_with_sentiment.json') as f1, open('/data/quant.json') as f2:\n  news = json.load(f1)\n  quant = json.load(f2)\n\ncombined = {\"news\": news, \"quant\": quant}\nwith open('/data/aggregate.json','w') as f:\n  json.dump(combined, f, indent=2)\n\nreturn {\"file\":\"/data/aggregate.json\"}"
+        }
+      },
+      {
+        "id": "11",
+        "name": "Outlook Summary (GPT-4.1 nano)",
+        "type": "n8n-nodes-base.openAi",
+        "position": [2500, 450],
+        "parameters": {
+          "resource": "completion",
+          "model": "gpt-4.1-nano",
+          "prompt": "You are a financial analyst AI. Summarize the following analysis into a simple stock outlook:\n\n{{$json[\"file\"]}}"
+        },
+        "credentials": {
+          "openAiApi": "OpenAI API"
+        }
+      },
+      {
+        "id": "12",
+        "name": "Send Outlook to Telegram",
+        "type": "n8n-nodes-base.telegram",
+        "position": [2750, 450],
+        "parameters": {
+          "chatId": "={{$node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"]}}",
+          "text": "={{$json[\"choices\"][0][\"text\"]}}"
+        },
+        "credentials": {
+          "telegramApi": "Telegram Bot"
+        }
+      },
+      {
+        "id": "13",
+        "name": "Most Active Stocks Scheduler",
+        "type": "n8n-nodes-base.cron",
+        "position": [500, 700],
+        "parameters": {
+          "triggerTimes": [
+            {
+              "hour": 9,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      {
+        "id": "14",
+        "name": "Scrape Most Active",
+        "type": "n8n-nodes-base.httpRequest",
+        "position": [750, 700],
+        "parameters": {
+          "url": "https://finance.yahoo.com/markets/stocks/most-active/?start=0&count=9",
+          "responseFormat": "string"
+        }
+      }
+    ],
+    "connections": {
+      "Telegram Trigger": {
+        "main": [
+          [{ "node": "Welcome Message", "type": "main", "index": 0 }]
+        ]
+      },
+      "Welcome Message": {
+        "main": [
+          [{ "node": "Extract Ticker", "type": "main", "index": 0 }]
+        ]
+      },
+      "Extract Ticker": {
+        "main": [
+          [{ "node": "Validate Ticker (HTTP)", "type": "main", "index": 0 }]
+        ]
+      },
+      "Validate Ticker (HTTP)": {
+        "main": [
+          [{ "node": "Check Valid Ticker", "type": "main", "index": 0 }]
+        ]
+      },
+      "Check Valid Ticker": {
+        "main": [
+          [
+            { "node": "Invalid Ticker Message", "type": "main", "index": 1 },
+            { "node": "Scrape Yahoo News", "type": "main", "index": 0 }
+          ]
+        ]
+      },
+      "Scrape Yahoo News": {
+        "main": [
+          [{ "node": "Sentiment Analysis", "type": "main", "index": 0 }]
+        ]
+      },
+      "Sentiment Analysis": {
+        "main": [
+          [{ "node": "Quant Analysis (yfinance stub)", "type": "main", "index": 0 }]
+        ]
+      },
+      "Quant Analysis (yfinance stub)": {
+        "main": [
+          [{ "node": "Aggregate Results", "type": "main", "index": 0 }]
+        ]
+      },
+      "Aggregate Results": {
+        "main": [
+          [{ "node": "Outlook Summary (GPT-4.1 nano)", "type": "main", "index": 0 }]
+        ]
+      },
+      "Outlook Summary (GPT-4.1 nano)": {
+        "main": [
+          [{ "node": "Send Outlook to Telegram", "type": "main", "index": 0 }]
+        ]
+      },
+      "Most Active Stocks Scheduler": {
+        "main": [
+          [{ "node": "Scrape Most Active", "type": "main", "index": 0 }]
+        ]
+      }
+    }
+  }
+  
