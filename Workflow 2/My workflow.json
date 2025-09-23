@@ -1,0 +1,583 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "e59c817f-cc48-4d31-9139-d2c6539d48ed",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [
+        -1248,
+        160
+      ],
+      "typeVersion": 1.2,
+      "webhookId": "7be3fbed-415e-414f-8941-a5c3a07e0f5a",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json[\"message\"][\"chat\"][\"id\"]}}",
+        "text": "Hi, welcome to this daily financial news agent! Please enter a stock ticker symbol for which you want aggregated news on.",
+        "additionalFields": {}
+      },
+      "id": "04b50e3b-1ab2-47de-8059-9fd78c265730",
+      "name": "Welcome Message",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        -1008,
+        160
+      ],
+      "typeVersion": 1.2,
+      "webhookId": "d0643c57-239c-47eb-9690-432c8183abfc",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ ticker: $json[\"message\"][\"text\"].trim().toUpperCase() }];"
+      },
+      "id": "2143fcc9-b40f-47a6-bae9-80a28efd1f92",
+      "name": "Extract Ticker",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        -752,
+        160
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{`https://finance.yahoo.com/quote/${$json[\"ticker\"]}/news/`}}",
+        "options": {}
+      },
+      "id": "5fcc6886-5bd4-4b06-b7b3-3d0b5cc11352",
+      "name": "Validate Ticker (HTTP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -496,
+        160
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"body\"]}}",
+              "operation": "contains",
+              "value2": "News"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d1561f9f-0f2f-450e-89f2-a9100d2152e3",
+      "name": "Check Valid Ticker",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -256,
+        160
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "chatId": "={{$node[\"Telegram Trigger\"].json[\"message\"][\"chat\"][\"id\"]}}",
+        "text": "The ticker symbol you entered is invalid. Please try again.",
+        "additionalFields": {}
+      },
+      "id": "da79a48d-b66e-4935-84ab-03dea5cf073f",
+      "name": "Invalid Ticker Message",
+      "type": "n8n-nodes-base.telegram",
+      "position": [
+        -1008,
+        416
+      ],
+      "typeVersion": 1.2,
+      "webhookId": "d504dd02-6fb2-4808-97de-9c55ee8a5ce7",
+      "credentials": {
+        "telegramApi": {
+          "id": null,
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "import json\nwith open('/data/news_with_sentiment.json') as f1, open('/data/quant.json') as f2:\n  news = json.load(f1)\n  quant = json.load(f2)\n\ncombined = {\"news\": news, \"quant\": quant}\nwith open('/data/aggregate.json','w') as f:\n  json.dump(combined, f, indent=2)\n\nreturn {\"file\":\"/data/aggregate.json\"}"
+      },
+      "id": "4dc09a4c-0f89-499c-8a26-0b5229edd327",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        432,
+        144
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://finance.yahoo.com/markets/stocks/most-active/?start=0&count=9",
+        "options": {}
+      },
+      "id": "f98581b1-9a11-4774-8cce-7a1bc8ee7c46",
+      "name": "Scrape Most Active",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -672,
+        720
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful assistant"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        144
+      ],
+      "id": "4f0e237a-c245-469c-97e4-3e1c91460dc0",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        448
+      ],
+      "id": "60a64ce0-6c55-49b4-a166-2bc430ffa1e1",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        752,
+        448
+      ],
+      "id": "f626016e-0ebd-4e66-8e22-69678b7f460f",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTool",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        464
+      ],
+      "id": "c63c3ff8-b82b-4140-8879-ce9fb29088ae",
+      "name": "Send a text message in Telegram",
+      "webhookId": "ff491c98-b0e5-46d0-b058-543c02e71a10"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        288,
+        544
+      ],
+      "id": "bd61d114-4690-4a28-a9c1-3f7cf9328a1c",
+      "name": "Insert rows in a table"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        64
+      ],
+      "id": "e3d90dcf-833f-495d-bc68-d9285dadab02",
+      "name": "Scraping code"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        64
+      ],
+      "id": "07b9b916-f3cd-41c4-81fe-a6a2fbd08b4d",
+      "name": "NLP analysis"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "56bbf27d-3f40-4c85-be3d-8fc0796df482",
+      "name": "Quant analysis yfinance"
+    },
+    {
+      "parameters": {
+        "functionCode": "import json\nwith open('/data/news_with_sentiment.json') as f1, open('/data/quant.json') as f2:\n  news = json.load(f1)\n  quant = json.load(f2)\n\ncombined = {\"news\": news, \"quant\": quant}\nwith open('/data/aggregate.json','w') as f:\n  json.dump(combined, f, indent=2)\n\nreturn {\"file\":\"/data/aggregate.json\"}"
+      },
+      "id": "9cbce98d-1566-4821-994c-233e7b43fba0",
+      "name": "Aggregate Results1",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        96,
+        752
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        576
+      ],
+      "id": "08e17b42-d65e-4f7f-be40-75b9efe037a9",
+      "name": "Scraping code routine"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        576
+      ],
+      "id": "72e24ed0-22f0-41d5-a99c-a8e67fee6c27",
+      "name": "NLP analysis routine"
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        832
+      ],
+      "id": "6d3f90bf-3334-4167-ba61-6c90d9a523f4",
+      "name": "Quant analysis yfinance routine"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -928,
+        720
+      ],
+      "id": "1d965244-2c0a-44b5-9cea-dd47eec7ddf3",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Welcome Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome Message": {
+      "main": [
+        [
+          {
+            "node": "Extract Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ticker": {
+      "main": [
+        [
+          {
+            "node": "Validate Ticker (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Ticker (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "Check Valid Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Valid Ticker": {
+      "main": [
+        [
+          {
+            "node": "Scraping code",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Quant analysis yfinance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Ticker Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message in Telegram": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scraping code": {
+      "main": [
+        [
+          {
+            "node": "NLP analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Most Active": {
+      "main": [
+        [
+          {
+            "node": "Scraping code routine",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Quant analysis yfinance routine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quant analysis yfinance": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NLP analysis": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results1": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid Ticker Message": {
+      "main": [
+        [
+          {
+            "node": "Extract Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scraping code routine": {
+      "main": [
+        [
+          {
+            "node": "NLP analysis routine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NLP analysis routine": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quant analysis yfinance routine": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scrape Most Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2b3e7bf0-0d19-4a9d-89e0-2f9d1b11bf07",
+  "meta": {
+    "instanceId": "e034cd156f016e84df8b726a771be913cfa57bcfc06a038a7bcdee050f364629"
+  },
+  "id": "kO03mRPIeFqkJnRn",
+  "tags": []
+}
