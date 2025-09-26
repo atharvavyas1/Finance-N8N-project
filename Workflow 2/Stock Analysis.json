@@ -48,19 +48,6 @@
     },
     {
       "parameters": {
-        "functionCode": "return [{ ticker: $json[\"message\"][\"text\"].trim().toUpperCase() }];"
-      },
-      "id": "2143fcc9-b40f-47a6-bae9-80a28efd1f92",
-      "name": "Extract Ticker",
-      "type": "n8n-nodes-base.function",
-      "position": [
-        -752,
-        160
-      ],
-      "typeVersion": 1
-    },
-    {
-      "parameters": {
         "url": "={{`https://finance.yahoo.com/quote/${$json[\"ticker\"]}/news/`}}",
         "options": {}
       },
@@ -351,6 +338,19 @@
       ],
       "id": "1d965244-2c0a-44b5-9cea-dd47eec7ddf3",
       "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract ticker symbol from Telegram message\nconst message = $json.message.text.trim().toUpperCase();\nconst chatId = $json.message.chat.id;\nconst userId = $json.message.from.id;\n\n// Regex: 1–5 uppercase letters, e.g., AAPL, TSLA, MSFT\nconst tickerRegex = /^[A-Z]{1,5}$/;\n\nif (!tickerRegex.test(message)) {\n  return [{\n    json: {\n      error: true,\n      message: \"❌ Please provide a valid ticker symbol (1–5 letters, e.g., AAPL, TSLA, MSFT).\",\n      chat_id: chatId\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    ticker: message,\n    chat_id: chatId,\n    user_id: userId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        160
+      ],
+      "id": "e6018509-a5ee-47d0-b24b-926c89b2e9f5",
+      "name": "Extract ticker symbol"
     }
   ],
   "pinData": {},
@@ -370,18 +370,7 @@
       "main": [
         [
           {
-            "node": "Extract Ticker",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract Ticker": {
-      "main": [
-        [
-          {
-            "node": "Validate Ticker (HTTP)",
+            "node": "Extract ticker symbol",
             "type": "main",
             "index": 0
           }
@@ -530,7 +519,7 @@
       "main": [
         [
           {
-            "node": "Extract Ticker",
+            "node": "Extract ticker symbol",
             "type": "main",
             "index": 0
           }
@@ -585,13 +574,24 @@
       "main": [
         []
       ]
+    },
+    "Extract ticker symbol": {
+      "main": [
+        [
+          {
+            "node": "Validate Ticker (HTTP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "df0377ed-75a7-4e4f-8b13-cee3a1321392",
+  "versionId": "19088318-ec21-488b-ae38-9f2c0bdbde22",
   "meta": {
     "instanceId": "e034cd156f016e84df8b726a771be913cfa57bcfc06a038a7bcdee050f364629"
   },
