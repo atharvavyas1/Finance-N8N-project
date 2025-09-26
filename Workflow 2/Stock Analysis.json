@@ -1,5 +1,5 @@
 {
-  "name": "My workflow",
+  "name": "Stock Analysis",
   "nodes": [
     {
       "parameters": {
@@ -76,13 +76,25 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
             {
-              "value1": "={{$json[\"body\"]}}",
-              "operation": "contains",
-              "value2": "News"
+              "id": "5f176e18-b431-4cbd-ad38-4ea10fff8ad3",
+              "leftValue": "",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
             }
-          ]
+          ],
+          "combinator": "and"
         },
         "options": {}
       },
@@ -568,13 +580,18 @@
           }
         ]
       ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        []
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "2b3e7bf0-0d19-4a9d-89e0-2f9d1b11bf07",
+  "versionId": "df0377ed-75a7-4e4f-8b13-cee3a1321392",
   "meta": {
     "instanceId": "e034cd156f016e84df8b726a771be913cfa57bcfc06a038a7bcdee050f364629"
   },
