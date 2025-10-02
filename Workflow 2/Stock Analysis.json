@@ -152,7 +152,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        736,
+        720,
         144
       ],
       "id": "4f0e237a-c245-469c-97e4-3e1c91460dc0",
@@ -233,20 +233,6 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        64
-      ],
-      "id": "e3d90dcf-833f-495d-bc68-d9285dadab02",
-      "name": "Scraping code"
-    },
-    {
-      "parameters": {
-        "language": "python",
-        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
         208,
         64
       ],
@@ -261,7 +247,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
+        96,
         320
       ],
       "id": "56bbf27d-3f40-4c85-be3d-8fc0796df482",
@@ -351,6 +337,69 @@
       ],
       "id": "e6018509-a5ee-47d0-b24b-926c89b2e9f5",
       "name": "Extract ticker symbol"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        576
+      ],
+      "id": "95d93645-5da4-46a1-b846-4d4776b6a9fa",
+      "name": "WhatsApp Trigger",
+      "webhookId": "1acf6de4-cc0d-4902-a8f6-b1cf93c761d7",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "LyJts6cJhsKvkJfN",
+          "name": "WhatsApp OAuth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        64
+      ],
+      "id": "e3d90dcf-833f-495d-bc68-d9285dadab02",
+      "name": "RSS Feed article retrieval"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        304
+      ],
+      "id": "475bd533-be32-4593-87ff-5724e80f1f9b",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract sender number from WhatsApp trigger\nconst senderNumber = items[0].json.from || \n                     items[0].json.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;\n\n// Also extract message text if needed\nconst messageText = items[0].json.text?.body || \n                    items[0].json.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;\n\nreturn [\n  {\n    json: {\n      senderNumber: senderNumber,\n      messageText: messageText,\n      originalData: items[0].json\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        576
+      ],
+      "id": "e6e8f0b4-b791-4ea6-b64e-b6e246e2efd1",
+      "name": "Code in JavaScript"
     }
   ],
   "pinData": {},
@@ -403,7 +452,7 @@
       "main": [
         [
           {
-            "node": "Scraping code",
+            "node": "RSS Feed article retrieval",
             "type": "main",
             "index": 0
           },
@@ -450,17 +499,6 @@
           {
             "node": "AI Agent",
             "type": "ai_tool",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Scraping code": {
-      "main": [
-        [
-          {
-            "node": "NLP analysis",
-            "type": "main",
             "index": 0
           }
         ]
@@ -582,6 +620,33 @@
             "node": "Validate Ticker (HTTP)",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Feed article retrieval": {
+      "main": [
+        [
+          {
+            "node": "NLP analysis",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -591,7 +656,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "19088318-ec21-488b-ae38-9f2c0bdbde22",
+  "versionId": "6a222a03-fb00-4385-9977-a7b48cb3d470",
   "meta": {
     "instanceId": "e034cd156f016e84df8b726a771be913cfa57bcfc06a038a7bcdee050f364629"
   },
