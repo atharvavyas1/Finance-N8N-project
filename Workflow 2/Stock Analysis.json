@@ -397,27 +397,13 @@
     },
     {
       "parameters": {
-        "language": "python",
-        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -896,
-        1040
-      ],
-      "id": "e01044bc-4558-4295-9e91-bc3091a03483",
-      "name": "Extract ticker"
-    },
-    {
-      "parameters": {
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
       "position": [
         -960,
-        1200
+        1120
       ],
       "id": "9322985a-a168-4139-ba9b-80bac715ecfb",
       "name": "AI Agent Ticker extractor"
@@ -430,7 +416,7 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        -1072,
+        -960,
         1392
       ],
       "id": "35399842-5070-4481-a4f7-94be2b3b2989",
@@ -450,7 +436,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -496,
+        -512,
         1120
       ],
       "id": "557e600a-ca99-427a-9863-b379bd1c265c",
@@ -748,11 +734,6 @@
       "main": [
         [
           {
-            "node": "Extract ticker",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "AI Agent Ticker extractor",
             "type": "main",
             "index": 0
@@ -777,17 +758,6 @@
           {
             "node": "AI Agent",
             "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extract ticker": {
-      "main": [
-        [
-          {
-            "node": "Info Extraction + NLP + storage",
-            "type": "main",
             "index": 0
           }
         ]
