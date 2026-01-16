@@ -8,12 +8,12 @@
         ],
         "additionalFields": {}
       },
-      "id": "e59c817f-cc48-4d31-9139-d2c6539d48ed",
+      "id": "3a6732ff-a1e6-4988-bc9d-4c3fd506a54c",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "position": [
-        -1248,
-        160
+        -1264,
+        16
       ],
       "typeVersion": 1.2,
       "webhookId": "7be3fbed-415e-414f-8941-a5c3a07e0f5a",
@@ -30,12 +30,12 @@
         "text": "Hi, welcome to this daily financial news agent! Please enter a stock ticker symbol for which you want aggregated news on.",
         "additionalFields": {}
       },
-      "id": "04b50e3b-1ab2-47de-8059-9fd78c265730",
+      "id": "a8f49d3d-6bb3-4636-9cf0-d2e121ff44b3",
       "name": "Welcome Message",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        -1008,
-        160
+        -1024,
+        16
       ],
       "typeVersion": 1.2,
       "webhookId": "d0643c57-239c-47eb-9690-432c8183abfc",
@@ -51,12 +51,12 @@
         "url": "={{`https://finance.yahoo.com/quote/${$json[\"ticker\"]}/news/`}}",
         "options": {}
       },
-      "id": "5fcc6886-5bd4-4b06-b7b3-3d0b5cc11352",
+      "id": "bee28192-f293-4cd9-966b-0fa23edac4c6",
       "name": "Validate Ticker (HTTP)",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
-        -496,
-        160
+        -512,
+        16
       ],
       "typeVersion": 4.2
     },
@@ -85,12 +85,12 @@
         },
         "options": {}
       },
-      "id": "d1561f9f-0f2f-450e-89f2-a9100d2152e3",
+      "id": "fe8d4fba-f96d-4876-934a-e28cb5eb4bd3",
       "name": "Check Valid Ticker",
       "type": "n8n-nodes-base.if",
       "position": [
-        -256,
-        160
+        -272,
+        16
       ],
       "typeVersion": 2.2
     },
@@ -100,12 +100,12 @@
         "text": "The ticker symbol you entered is invalid. Please try again.",
         "additionalFields": {}
       },
-      "id": "da79a48d-b66e-4935-84ab-03dea5cf073f",
+      "id": "999b8238-ae93-4d91-b7bf-52176be792f4",
       "name": "Invalid Ticker Message",
       "type": "n8n-nodes-base.telegram",
       "position": [
-        -1008,
-        416
+        -1024,
+        272
       ],
       "typeVersion": 1.2,
       "webhookId": "d504dd02-6fb2-4808-97de-9c55ee8a5ce7",
@@ -120,12 +120,12 @@
       "parameters": {
         "functionCode": "import json\nwith open('/data/news_with_sentiment.json') as f1, open('/data/quant.json') as f2:\n  news = json.load(f1)\n  quant = json.load(f2)\n\ncombined = {\"news\": news, \"quant\": quant}\nwith open('/data/aggregate.json','w') as f:\n  json.dump(combined, f, indent=2)\n\nreturn {\"file\":\"/data/aggregate.json\"}"
       },
-      "id": "4dc09a4c-0f89-499c-8a26-0b5229edd327",
+      "id": "3e4338e0-fff1-400f-9657-0c80eb41bcc3",
       "name": "Aggregate Results",
       "type": "n8n-nodes-base.function",
       "position": [
-        432,
-        144
+        416,
+        0
       ],
       "typeVersion": 1
     },
@@ -134,12 +134,12 @@
         "url": "https://finance.yahoo.com/markets/stocks/most-active/?start=0&count=9",
         "options": {}
       },
-      "id": "f98581b1-9a11-4774-8cce-7a1bc8ee7c46",
+      "id": "e27cc8f0-9501-4a37-b4c3-5be3135fc74a",
       "name": "Scrape Most Active",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
         -672,
-        720
+        656
       ],
       "typeVersion": 4.2
     },
@@ -152,29 +152,11 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        720,
-        144
+        672,
+        0
       ],
-      "id": "4f0e237a-c245-469c-97e4-3e1c91460dc0",
+      "id": "b9fc3aad-7a86-4e7a-80f8-ccddcded7288",
       "name": "AI Agent"
-    },
-    {
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "mode": "list",
-          "value": "gpt-4.1-mini"
-        },
-        "options": {}
-      },
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.2,
-      "position": [
-        544,
-        448
-      ],
-      "id": "60a64ce0-6c55-49b4-a166-2bc430ffa1e1",
-      "name": "OpenAI Chat Model"
     },
     {
       "parameters": {
@@ -184,9 +166,9 @@
       "typeVersion": 1.3,
       "position": [
         752,
-        448
+        384
       ],
-      "id": "f626016e-0ebd-4e66-8e22-69678b7f460f",
+      "id": "f36ab034-d10b-476d-b53c-1546b4e5884a",
       "name": "Simple Memory"
     },
     {
@@ -197,9 +179,9 @@
       "typeVersion": 1.2,
       "position": [
         928,
-        464
+        400
       ],
-      "id": "c63c3ff8-b82b-4140-8879-ce9fb29088ae",
+      "id": "7760bc61-c796-4cd9-861f-f1bf32402f12",
       "name": "Send a text message in Telegram",
       "webhookId": "ff491c98-b0e5-46d0-b058-543c02e71a10"
     },
@@ -220,9 +202,9 @@
       "typeVersion": 2.6,
       "position": [
         288,
-        544
+        480
       ],
-      "id": "bd61d114-4690-4a28-a9c1-3f7cf9328a1c",
+      "id": "f0c3e1f8-7ee2-4da0-a55b-f992d9fbc445",
       "name": "Insert rows in a table"
     },
     {
@@ -234,9 +216,9 @@
       "typeVersion": 2,
       "position": [
         208,
-        64
+        0
       ],
-      "id": "07b9b916-f3cd-41c4-81fe-a6a2fbd08b4d",
+      "id": "5bd950d1-5e76-4317-818e-4bf58e465296",
       "name": "NLP analysis"
     },
     {
@@ -247,22 +229,22 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        96,
-        320
+        80,
+        176
       ],
-      "id": "56bbf27d-3f40-4c85-be3d-8fc0796df482",
+      "id": "c079f00b-24c3-4a83-a686-5bb0ef01dd1a",
       "name": "Quant analysis yfinance"
     },
     {
       "parameters": {
         "functionCode": "import json\nwith open('/data/news_with_sentiment.json') as f1, open('/data/quant.json') as f2:\n  news = json.load(f1)\n  quant = json.load(f2)\n\ncombined = {\"news\": news, \"quant\": quant}\nwith open('/data/aggregate.json','w') as f:\n  json.dump(combined, f, indent=2)\n\nreturn {\"file\":\"/data/aggregate.json\"}"
       },
-      "id": "9cbce98d-1566-4821-994c-233e7b43fba0",
+      "id": "1d2c9544-aada-458c-ae37-b773f560099e",
       "name": "Aggregate Results1",
       "type": "n8n-nodes-base.function",
       "position": [
         96,
-        752
+        688
       ],
       "typeVersion": 1
     },
@@ -275,9 +257,9 @@
       "typeVersion": 2,
       "position": [
         -336,
-        576
+        512
       ],
-      "id": "08e17b42-d65e-4f7f-be40-75b9efe037a9",
+      "id": "05c6755e-dc5f-44b1-942a-5209cb6df2da",
       "name": "Scraping code routine"
     },
     {
@@ -289,9 +271,9 @@
       "typeVersion": 2,
       "position": [
         -128,
-        576
+        512
       ],
-      "id": "72e24ed0-22f0-41d5-a99c-a8e67fee6c27",
+      "id": "d7d42dab-7f3f-4668-8556-22fcb0c6b97c",
       "name": "NLP analysis routine"
     },
     {
@@ -303,9 +285,9 @@
       "typeVersion": 2,
       "position": [
         -336,
-        832
+        768
       ],
-      "id": "6d3f90bf-3334-4167-ba61-6c90d9a523f4",
+      "id": "ac65425c-4674-4b8f-a988-9d8f1c4a57b1",
       "name": "Quant analysis yfinance routine"
     },
     {
@@ -320,9 +302,9 @@
       "typeVersion": 1.2,
       "position": [
         -928,
-        720
+        656
       ],
-      "id": "1d965244-2c0a-44b5-9cea-dd47eec7ddf3",
+      "id": "2ab5b723-fcd4-4b7f-90e3-875199e64613",
       "name": "Schedule Trigger"
     },
     {
@@ -332,10 +314,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -752,
-        160
+        -768,
+        16
       ],
-      "id": "e6018509-a5ee-47d0-b24b-926c89b2e9f5",
+      "id": "33096272-ae30-4304-9828-55ca6851a5d6",
       "name": "Extract ticker symbol"
     },
     {
@@ -348,16 +330,16 @@
       "type": "n8n-nodes-base.whatsAppTrigger",
       "typeVersion": 1,
       "position": [
-        -1232,
-        576
+        -1216,
+        1120
       ],
-      "id": "95d93645-5da4-46a1-b846-4d4776b6a9fa",
+      "id": "cf8e2a1c-e6af-4f35-be4c-72aa0d9692f8",
       "name": "WhatsApp Trigger",
       "webhookId": "1acf6de4-cc0d-4902-a8f6-b1cf93c761d7",
       "credentials": {
         "whatsAppTriggerApi": {
-          "id": "LyJts6cJhsKvkJfN",
-          "name": "WhatsApp OAuth account 2"
+          "id": "png6NnlBDrlVdGEw",
+          "name": "WhatsApp OAuth account"
         }
       }
     },
@@ -370,9 +352,9 @@
       "typeVersion": 2,
       "position": [
         0,
-        64
+        0
       ],
-      "id": "e3d90dcf-833f-495d-bc68-d9285dadab02",
+      "id": "a59639bf-820e-4fe6-875e-d733667dd04c",
       "name": "RSS Feed article retrieval"
     },
     {
@@ -382,24 +364,173 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -400,
-        304
+        -416,
+        160
       ],
-      "id": "475bd533-be32-4593-87ff-5724e80f1f9b",
+      "id": "7d32f7c6-125a-4793-a431-9d4508292656",
       "name": "Edit Fields"
     },
     {
       "parameters": {
-        "jsCode": "// Extract sender number from WhatsApp trigger\nconst senderNumber = items[0].json.from || \n                     items[0].json.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;\n\n// Also extract message text if needed\nconst messageText = items[0].json.text?.body || \n                    items[0].json.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;\n\nreturn [\n  {\n    json: {\n      senderNumber: senderNumber,\n      messageText: messageText,\n      originalData: items[0].json\n    }\n  }\n];"
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {
+          "maxOutputTokens": 2048,
+          "temperature": 0.4,
+          "topK": 32,
+          "topP": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        576,
+        208
+      ],
+      "id": "4b3b4b3e-c634-43e7-be36-afc1aa0bd271",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IN0LVAUBQJhVOyLX",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1008,
-        576
+        -896,
+        1040
       ],
-      "id": "e6e8f0b4-b791-4ea6-b64e-b6e246e2efd1",
-      "name": "Code in JavaScript"
+      "id": "e01044bc-4558-4295-9e91-bc3091a03483",
+      "name": "Extract ticker"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -960,
+        1200
+      ],
+      "id": "9322985a-a168-4139-ba9b-80bac715ecfb",
+      "name": "AI Agent Ticker extractor"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1072,
+        1392
+      ],
+      "id": "35399842-5070-4481-a4f7-94be2b3b2989",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IN0LVAUBQJhVOyLX",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        1120
+      ],
+      "id": "557e600a-ca99-427a-9863-b379bd1c265c",
+      "name": "Info Extraction + NLP + storage"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful assistant"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        1120
+      ],
+      "id": "e45131fe-8d49-455d-913d-e469d58380b3",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        1504
+      ],
+      "id": "11e59219-8c0a-4690-af2f-3ae9a964e6eb",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {
+          "maxOutputTokens": 2048,
+          "temperature": 0.4,
+          "topK": 32,
+          "topP": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        1328
+      ],
+      "id": "2dfbda3a-785d-4c89-b497-7ebb40f6443a",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IN0LVAUBQJhVOyLX",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "recipientPhoneNumber": "input",
+        "textBody": "input",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        1120
+      ],
+      "id": "f0359c0f-515e-4865-9359-e1f3a3d7b753",
+      "name": "Send message",
+      "webhookId": "675ef77b-1771-4f99-9096-edc2d055d800",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "GDW0yvut0KtheU6c",
+          "name": "WhatsApp account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -466,17 +597,6 @@
           {
             "node": "Invalid Ticker Message",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "AI Agent",
-            "type": "ai_languageModel",
             "index": 0
           }
         ]
@@ -608,11 +728,6 @@
         ]
       ]
     },
-    "Insert rows in a table": {
-      "main": [
-        []
-      ]
-    },
     "Extract ticker symbol": {
       "main": [
         [
@@ -633,7 +748,12 @@
       "main": [
         [
           {
-            "node": "Code in JavaScript",
+            "node": "Extract ticker",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent Ticker extractor",
             "type": "main",
             "index": 0
           }
@@ -650,16 +770,104 @@
           }
         ]
       ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract ticker": {
+      "main": [
+        [
+          {
+            "node": "Info Extraction + NLP + storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Ticker extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Ticker extractor": {
+      "main": [
+        [
+          {
+            "node": "Info Extraction + NLP + storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info Extraction + NLP + storage": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "6a222a03-fb00-4385-9977-a7b48cb3d470",
+  "versionId": "f5e97e38-75a6-42e1-ae7b-292ceba241dc",
   "meta": {
-    "instanceId": "e034cd156f016e84df8b726a771be913cfa57bcfc06a038a7bcdee050f364629"
+    "instanceId": "6f4c0ab5a0a60dc572d23576dd5369c5ef2f43800923d7f38e424c927c19ccd4"
   },
-  "id": "kO03mRPIeFqkJnRn",
+  "id": "CslweeyRag7iE9fq",
   "tags": []
 }
