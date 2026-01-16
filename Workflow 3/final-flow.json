@@ -1,0 +1,242 @@
+{
+  "name": "final-flow",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1216,
+        1120
+      ],
+      "id": "cf8e2a1c-e6af-4f35-be4c-72aa0d9692f8",
+      "name": "WhatsApp Trigger",
+      "webhookId": "1acf6de4-cc0d-4902-a8f6-b1cf93c761d7",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "png6NnlBDrlVdGEw",
+          "name": "WhatsApp OAuth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -960,
+        1120
+      ],
+      "id": "9322985a-a168-4139-ba9b-80bac715ecfb",
+      "name": "AI Agent Ticker extractor"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        1392
+      ],
+      "id": "35399842-5070-4481-a4f7-94be2b3b2989",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IN0LVAUBQJhVOyLX",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "language": "python",
+        "pythonCode": "# Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor item in _input.all():\n  item.json.myNewField = 1\nreturn _input.all()"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        1120
+      ],
+      "id": "557e600a-ca99-427a-9863-b379bd1c265c",
+      "name": "Info Extraction + NLP + storage"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful assistant"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        1120
+      ],
+      "id": "e45131fe-8d49-455d-913d-e469d58380b3",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 3
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        1504
+      ],
+      "id": "11e59219-8c0a-4690-af2f-3ae9a964e6eb",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite-preview-09-2025",
+        "options": {
+          "maxOutputTokens": 2048,
+          "temperature": 0.4,
+          "topK": 32,
+          "topP": 1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        1328
+      ],
+      "id": "2dfbda3a-785d-4c89-b497-7ebb40f6443a",
+      "name": "Google Gemini Chat Model2",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "IN0LVAUBQJhVOyLX",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "recipientPhoneNumber": "input",
+        "textBody": "input",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        160,
+        1120
+      ],
+      "id": "f0359c0f-515e-4865-9359-e1f3a3d7b753",
+      "name": "Send message",
+      "webhookId": "675ef77b-1771-4f99-9096-edc2d055d800",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "GDW0yvut0KtheU6c",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Ticker extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Ticker extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Ticker extractor": {
+      "main": [
+        [
+          {
+            "node": "Info Extraction + NLP + storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Info Extraction + NLP + storage": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f5e97e38-75a6-42e1-ae7b-292ceba241dc",
+  "meta": {
+    "instanceId": "6f4c0ab5a0a60dc572d23576dd5369c5ef2f43800923d7f38e424c927c19ccd4"
+  },
+  "id": "CslweeyRag7iE9fq",
+  "tags": []
+}
+
