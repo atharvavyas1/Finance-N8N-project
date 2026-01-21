@@ -26,7 +26,11 @@
     },
     {
       "parameters": {
-        "options": {}
+        "options": {
+          "systemMessage": "You are a stock ticker extraction assistant. Extract the stock ticker symbol from the user's message. If the user mentions a company name, convert it to the appropriate stock ticker. Respond with ONLY the ticker symbol in uppercase (e.g., AAPL, MSFT, GOOGL). If you cannot identify a valid stock, respond with 'INVALID'."
+        },
+        "promptType": "define",
+        "text": "={{ $json.changes[0].value.messages[0].text.body }}"
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3,
@@ -74,8 +78,10 @@
     {
       "parameters": {
         "options": {
-          "systemMessage": "You are a helpful assistant"
-        }
+          "systemMessage": "You are a financial news summarizer for WhatsApp. Given stock research data including news articles, sentiment analysis, and insider trading information, create a concise, easy-to-read summary suitable for mobile messaging. Use bullet points and emojis sparingly for readability. Keep the summary under 1000 characters."
+        },
+        "promptType": "define",
+        "text": "Summarize this stock research data for the ticker {{ $json.ticker }}:\n\nArticles: {{ JSON.stringify($json.articles) }}\n\nSentiment: {{ JSON.stringify($json.sentiment) }}\n\nInsider Trades: {{ JSON.stringify($json.insider_trades) }}"
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
@@ -127,8 +133,8 @@
     {
       "parameters": {
         "operation": "send",
-        "recipientPhoneNumber": "input",
-        "textBody": "input",
+        "recipientPhoneNumber": "={{ $('WhatsApp Trigger').item.json.changes[0].value.messages[0].from }}",
+        "textBody": "={{ $json.output }}",
         "additionalFields": {}
       },
       "type": "n8n-nodes-base.whatsApp",

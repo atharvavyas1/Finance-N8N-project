@@ -1,0 +1,20 @@
+# N8N Stock Research Dependencies
+# Generated from pyproject.toml
+# Install with: uv pip install -r requirements.txt
+# Or standard pip: pip install -r requirements.txt
+
+# Core HTTP & parsing
+requests>=2.31.0
+feedparser>=6.0.0
+beautifulsoup4>=4.12.0
+
+# NLP / ML
+torch>=2.0.0
+transformers>=4.35.0
+scikit-learn>=1.3.0
+nltk>=3.8.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
