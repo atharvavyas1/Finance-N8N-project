@@ -36,6 +36,8 @@ from transformers import BertForSequenceClassification, BertTokenizer
 
 # SEC EDGAR requires identification
 SEC_USER_AGENT = "StockResearchBot contact@example.com"  # UPDATE THIS
+EDGAR_ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
+SEC_BASE_URL = "https://data.sec.gov"
 
 # Article scraping settings
 MAX_ARTICLES = 5
@@ -322,16 +324,218 @@ def _sec_rate_limit():
 
 
 class InsiderTradingTracker:
-    """Fetches insider trading data from SEC EDGAR."""
+    """Fetches and parses insider trading data from SEC EDGAR.
+
+    Supports Form 3, 4, and 5 filings with detailed transaction parsing
+    including derivative transactions, holdings, and transaction code mapping.
+    """
+
+    TRANSACTION_CODES = {
+        'P': 'Open Market Purchase',
+        'S': 'Open Market Sale',
+        'A': 'Grant/Award',
+        'D': 'Sale to Issuer',
+        'F': 'Payment of Exercise Price or Tax Liability',
+        'G': 'Gift',
+        'M': 'Exercise of Options',
+        'C': 'Conversion',
+        'E': 'Expiration',
+        'H': 'Held/Withheld',
+        'I': 'Discretionary Transaction',
+        'J': 'Other',
+        'K': 'Equity Swap',
+        'L': 'Small Acquisition',
+        'U': 'Disposition to Issuer',
+        'W': 'Acquisition or Disposition by Will',
+        'X': 'Exercise of Out-of-the-Money Options',
+        'Z': 'Deposit into or Withdrawal from Voting Trust'
+    }
 
     def __init__(self):
         self.headers = {
             "User-Agent": SEC_USER_AGENT,
             "Accept-Encoding": "gzip, deflate"
         }
+        self.data_headers = {
+            "User-Agent": SEC_USER_AGENT,
+            "Accept-Encoding": "gzip, deflate",
+            "Host": "data.sec.gov"
+        }
+
+    # ---- XML helpers --------------------------------------------------------
+
+    @staticmethod
+    def _get_text(element, tag_name: str) -> Optional[str]:
+        """Safely get text from an XML element, handling nested <value> tags."""
+        if element is None:
+            return None
+        found = element.find(f'.//{tag_name}')
+        if found is None:
+            return None
+        value_elem = found.find('value')
+        if value_elem is not None:
+            return value_elem.text
+        return found.text
+
+    @staticmethod
+    def _parse_address(owner_id) -> Dict:
+        """Parse address information from owner ID element."""
+        if owner_id is None:
+            return {}
+        address = owner_id.find('.//reportingOwnerAddress')
+        if address is None:
+            return {}
+
+        def _txt(tag):
+            el = address.find(f'.//{tag}')
+            return el.text if el is not None else None
+
+        return {
+            'street1': _txt('rptOwnerStreet1'),
+            'street2': _txt('rptOwnerStreet2'),
+            'city': _txt('rptOwnerCity'),
+            'state': _txt('rptOwnerState'),
+            'zipCode': _txt('rptOwnerZipCode')
+        }
+
+    @classmethod
+    def _parse_relationship(cls, relationship) -> Dict:
+        """Parse the relationship of the reporting owner to the company."""
+        if relationship is None:
+            return {}
+        return {
+            'isDirector': cls._get_text(relationship, 'isDirector') == '1',
+            'isOfficer': cls._get_text(relationship, 'isOfficer') == '1',
+            'isTenPercentOwner': cls._get_text(relationship, 'isTenPercentOwner') == '1',
+            'isOther': cls._get_text(relationship, 'isOther') == '1',
+            'officerTitle': cls._get_text(relationship, 'officerTitle')
+        }
+
+    @staticmethod
+    def _parse_transaction(trans_element, derivative: bool = False) -> Optional[Dict]:
+        """Parse a single transaction element from Form 4 XML."""
+        if trans_element is None:
+            return None
+
+        def _val(parent, tag):
+            elem = parent.find(f'.//{tag}')
+            if elem is None:
+                return None
+            value_elem = elem.find('value')
+            return value_elem.text if value_elem is not None else elem.text
+
+        transaction = {
+            'securityTitle': _val(trans_element, 'securityTitle'),
+            'transactionDate': _val(trans_element, 'transactionDate'),
+            'deemedExecutionDate': _val(trans_element, 'deemedExecutionDate'),
+            'transactionCode': _val(trans_element, 'transactionCode'),
+            'equitySwapInvolved': _val(trans_element, 'equitySwapInvolved') == '1',
+        }
+
+        shares = _val(trans_element, 'transactionShares')
+        price = _val(trans_element, 'transactionPricePerShare')
+
+        transaction.update({
+            'shares': float(shares) if shares else None,
+            'pricePerShare': float(price) if price else None,
+            'acquiredDisposed': _val(trans_element, 'transactionAcquiredDisposedCode'),
+            'totalValue': None
+        })
+
+        if transaction['shares'] and transaction['pricePerShare']:
+            transaction['totalValue'] = transaction['shares'] * transaction['pricePerShare']
+
+        shares_owned = _val(trans_element, 'sharesOwnedFollowingTransaction')
+        transaction['sharesOwnedAfter'] = float(shares_owned) if shares_owned else None
+        transaction['directIndirect'] = _val(trans_element, 'directOrIndirectOwnership')
+
+        return transaction
+
+    @staticmethod
+    def _parse_holdings(root) -> List[Dict]:
+        """Parse current non-derivative holdings from Form 4 XML."""
+        holdings = []
+
+        def _val(parent, tag):
+            elem = parent.find(f'.//{tag}')
+            if elem is None:
+                return None
+            value_elem = elem.find('value')
+            return value_elem.text if value_elem is not None else elem.text
+
+        for holding in root.findall('.//nonDerivativeHolding'):
+            holdings.append({
+                'securityTitle': _val(holding, 'securityTitle'),
+                'shares': _val(holding, 'sharesOwnedFollowingTransaction'),
+                'directIndirect': _val(holding, 'directOrIndirectOwnership'),
+                'natureOfOwnership': _val(holding, 'natureOfOwnership')
+            })
+
+        return holdings
+
+    # ---- Form 4 parsing -----------------------------------------------------
+
+    def _parse_form4(self, xml_content: str) -> Optional[Dict]:
+        """Parse a Form 4 XML file and extract all relevant information.
+
+        Returns a structured dict with issuer, reportingOwner, transactions,
+        derivativeTransactions, and holdings.
+        """
+        try:
+            root = ET.fromstring(xml_content)
+        except ET.ParseError:
+            return None
+
+        result = {}
+
+        # Issuer
+        issuer = root.find('.//issuer')
+        if issuer is not None:
+            result['issuer'] = {
+                'name': self._get_text(issuer, 'issuerName'),
+                'cik': self._get_text(issuer, 'issuerCik'),
+                'ticker': self._get_text(issuer, 'issuerTradingSymbol')
+            }
+        else:
+            result['issuer'] = None
+
+        # Reporting owner
+        owner = root.find('.//reportingOwner')
+        if owner is not None:
+            owner_id = owner.find('.//reportingOwnerId')
+            relationship = owner.find('.//reportingOwnerRelationship')
+            result['reportingOwner'] = {
+                'name': self._get_text(owner_id, 'rptOwnerName'),
+                'cik': self._get_text(owner_id, 'rptOwnerCik'),
+                'address': self._parse_address(owner_id),
+                'relationship': self._parse_relationship(relationship)
+            }
+        else:
+            result['reportingOwner'] = None
+
+        # Non-derivative transactions
+        result['transactions'] = []
+        for trans in root.findall('.//nonDerivativeTransaction'):
+            parsed = self._parse_transaction(trans, derivative=False)
+            if parsed:
+                result['transactions'].append(parsed)
+
+        # Derivative transactions (options, warrants, etc.)
+        result['derivativeTransactions'] = []
+        for trans in root.findall('.//derivativeTransaction'):
+            parsed = self._parse_transaction(trans, derivative=True)
+            if parsed:
+                result['derivativeTransactions'].append(parsed)
+
+        # Current holdings
+        result['holdings'] = self._parse_holdings(root)
+
+        return result
+
+    # ---- SEC API helpers ----------------------------------------------------
 
     def _get_cik(self, ticker: str) -> Optional[str]:
-        """Look up CIK by ticker symbol."""
+        """Look up a company's CIK by ticker symbol."""
         _sec_rate_limit()
         url = "https://www.sec.gov/files/company_tickers.json"
 
@@ -349,69 +553,94 @@ class InsiderTradingTracker:
             return None
 
     def _get_submissions(self, cik: str) -> Optional[Dict]:
-        """Get company submissions from SEC."""
+        """Get all submission history for a company."""
         _sec_rate_limit()
-        headers = {**self.headers, "Host": "data.sec.gov"}
-        url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+        cik = cik.zfill(10)
+        url = f"{SEC_BASE_URL}/submissions/CIK{cik}.json"
 
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=self.data_headers, timeout=10)
             response.raise_for_status()
             return response.json()
         except Exception:
             return None
 
-    def _parse_form4(self, xml_content: str) -> Optional[Dict]:
-        """Parse Form 4 XML content."""
-        try:
-            root = ET.fromstring(xml_content)
-        except ET.ParseError:
-            return None
+    def _filter_insider_filings(
+        self,
+        submissions_data: Dict,
+        form_types: Optional[List[str]] = None,
+        days_back: Optional[int] = None
+    ) -> List[Dict]:
+        """Filter submissions to insider trading forms (3, 4, 5) within a date range."""
+        if form_types is None:
+            form_types = ['3', '4', '5']
 
-        def get_text(elem, tag):
-            if elem is None:
-                return None
-            found = elem.find(f'.//{tag}')
-            if found is None:
-                return None
-            value = found.find('value')
-            return value.text if value is not None else found.text
+        recent = submissions_data.get('filings', {}).get('recent', {})
 
-        owner = root.find('.//reportingOwner')
-        owner_id = owner.find('.//reportingOwnerId') if owner else None
-        relationship = owner.find('.//reportingOwnerRelationship') if owner else None
+        cutoff_date = None
+        if days_back:
+            cutoff_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
 
-        transactions = []
-        for trans in root.findall('.//nonDerivativeTransaction'):
-            shares = get_text(trans, 'transactionShares')
-            price = get_text(trans, 'transactionPricePerShare')
-            
-            transactions.append({
-                'date': get_text(trans, 'transactionDate'),
-                'shares': float(shares) if shares else None,
-                'price': float(price) if price else None,
-                'type': get_text(trans, 'transactionCode'),
-                'acquired': get_text(trans, 'transactionAcquiredDisposedCode') == 'A'
+        insider_filings = []
+        forms = recent.get('form', [])
+        num_forms = len(forms)
+
+        for i, form in enumerate(forms):
+            base_form = form.split('/')[0]
+            if base_form not in form_types:
+                continue
+
+            filing_date = recent['filingDate'][i]
+            if cutoff_date and filing_date < cutoff_date:
+                continue
+
+            if len(insider_filings) >= MAX_INSIDER_FILINGS:
+                break
+
+            insider_filings.append({
+                'accessionNumber': recent['accessionNumber'][i],
+                'filingDate': filing_date,
+                'reportDate': recent.get('reportDate', [None] * num_forms)[i],
+                'acceptanceDateTime': recent.get('acceptanceDateTime', [None] * num_forms)[i],
+                'form': form,
+                'primaryDocument': recent.get('primaryDocument', [None] * num_forms)[i],
+                'description': recent.get('primaryDocDescription', [None] * num_forms)[i],
+                'isAmendment': '/A' in form
             })
 
-        roles = []
-        if relationship:
-            if get_text(relationship, 'isDirector') == '1':
-                roles.append('Director')
-            if get_text(relationship, 'isOfficer') == '1':
-                title = get_text(relationship, 'officerTitle') or 'Officer'
-                roles.append(title)
-            if get_text(relationship, 'isTenPercentOwner') == '1':
-                roles.append('10% Owner')
+        return insider_filings
 
-        return {
-            'insider_name': get_text(owner_id, 'rptOwnerName') if owner_id else None,
-            'roles': roles,
-            'transactions': transactions
-        }
+    def _fetch_form4_xml(self, cik: str, accession_number: str, primary_doc: str) -> str:
+        """Download raw XML content of a Form 4 filing.
+
+        Strips XSLT stylesheet paths (e.g. ``xslF345X05/``) so the SEC server
+        returns raw XML instead of an HTML-rendered page.
+        """
+        _sec_rate_limit()
+        cik_for_url = cik.lstrip('0') or '0'
+        acc_no = accession_number.replace('-', '')
+
+        if '/' in primary_doc:
+            primary_doc = primary_doc.split('/')[-1]
+
+        url = f"{EDGAR_ARCHIVES_BASE}/{cik_for_url}/{acc_no}/{primary_doc}"
+        response = requests.get(url, headers=self.headers, timeout=10)
+        response.raise_for_status()
+        return response.text
+
+    # ---- Public API ---------------------------------------------------------
+
+    @classmethod
+    def get_transaction_description(cls, code: str) -> str:
+        """Get human-readable description of a transaction code."""
+        return cls.TRANSACTION_CODES.get(code, f'Unknown ({code})')
 
     def get_insider_trades(self, ticker: str, days: int = INSIDER_DAYS_BACK) -> Dict:
-        """Get recent insider trades for a ticker."""
+        """Get recent insider trades for a ticker with full parsed details.
+
+        Returns a dict with ``trades`` (list of comprehensive Form 4 filings)
+        and ``count``.
+        """
         cik = self._get_cik(ticker)
         if not cik:
             return {'trades': [], 'error': f'CIK not found for {ticker}'}
@@ -420,40 +649,21 @@ class InsiderTradingTracker:
         if not submissions:
             return {'trades': [], 'error': 'Failed to fetch SEC submissions'}
 
-        recent = submissions.get('filings', {}).get('recent', {})
-        cutoff = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-
-        filings = []
-        for i, form in enumerate(recent.get('form', [])):
-            if form.split('/')[0] != '4':
-                continue
-            filing_date = recent['filingDate'][i]
-            if filing_date < cutoff:
-                continue
-            if len(filings) >= MAX_INSIDER_FILINGS:
-                break
-
-            filings.append({
-                'accession': recent['accessionNumber'][i],
-                'date': filing_date,
-                'doc': recent.get('primaryDocument', [None] * len(recent['form']))[i]
-            })
+        filings = self._filter_insider_filings(
+            submissions, form_types=['4'], days_back=days
+        )
 
         trades = []
         for filing in filings:
             try:
-                _sec_rate_limit()
-                cik_url = cik.lstrip('0') or '0'
-                acc_no = filing['accession'].replace('-', '')
-                doc = filing['doc'].split('/')[-1] if '/' in filing['doc'] else filing['doc']
-                
-                url = f"https://www.sec.gov/Archives/edgar/data/{cik_url}/{acc_no}/{doc}"
-                response = requests.get(url, headers=self.headers, timeout=10)
-                response.raise_for_status()
-
-                parsed = self._parse_form4(response.text)
+                xml_content = self._fetch_form4_xml(
+                    cik,
+                    filing['accessionNumber'],
+                    filing['primaryDocument']
+                )
+                parsed = self._parse_form4(xml_content)
                 if parsed:
-                    parsed['filing_date'] = filing['date']
+                    parsed['filing_metadata'] = filing
                     trades.append(parsed)
             except Exception:
                 continue
